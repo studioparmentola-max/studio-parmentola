@@ -89,9 +89,11 @@ ensureRecurringDues();localStorage.setItem('sp_finance_db',JSON.stringify(db));r
 // Google Drive sync via appDataFolder. Requires HTTPS + OAuth Web Client ID.
 const DRIVE_DATA_NAME='studio-parmentola-data.json', DRIVE_SCOPE='https://www.googleapis.com/auth/drive.appdata';
 const DRIVE_CLIENT_KEY='sp_drive_client_id', DRIVE_SNAPSHOT_KEY='sp_drive_last_synced';
+// Client ID pubblico del gestionale: fallback se localStorage non conserva la configurazione.
+const DEFAULT_DRIVE_CLIENT_ID='345231436049-hbjcr946beovnb79l18fhik3hfk5q603.apps.googleusercontent.com';
 let driveTokenClient=null, driveAccessToken=null, driveTokenExpiry=0, driveFileId=null, driveSyncBusy=false;
 function driveStatus(msg,kind=''){const el=$('#driveStatus');if(el){el.textContent=msg;el.className='sync-status'+(kind?' '+kind:'')}}
-function getClientId(){return localStorage.getItem(DRIVE_CLIENT_KEY)||''}
+function getClientId(){return localStorage.getItem(DRIVE_CLIENT_KEY)||DEFAULT_DRIVE_CLIENT_ID}
 function driveInitTokenClient(){if(!window.google?.accounts?.oauth2)throw Error('Libreria Google non caricata. Controlla la connessione e ricarica.');const clientId=getClientId();if(!clientId)throw Error('Configura prima il Client ID OAuth di Google.');driveTokenClient=google.accounts.oauth2.initTokenClient({client_id:clientId,scope:DRIVE_SCOPE,callback:async r=>{if(r.error){driveStatus('Accesso Google non riuscito','bad');alert('Accesso Google non riuscito: '+r.error);return}driveAccessToken=r.access_token;driveTokenExpiry=Date.now()+(Number(r.expires_in)||3600)*1000;try{await performDriveSync()}catch(e){driveStatus('Errore sincronizzazione','bad');alert('Sincronizzazione non completata: '+(e.message||e))}},error_callback:e=>{driveStatus('Accesso Google non riuscito','bad');console.error(e)}})}
 async function driveFetch(url,options={}){if(!driveAccessToken)throw Error('Accesso Google scaduto. Premi Sincronizza e autorizza di nuovo.');const headers=new Headers(options.headers||{});headers.set('Authorization','Bearer '+driveAccessToken);const r=await fetch(url,{...options,headers});if(!r.ok){let d='';try{d=(await r.json()).error?.message||''}catch{}throw Error(`Google Drive (${r.status}) ${d}`.trim())}return r.status===204?null:r.json()}
 async function findDriveFile(){const q=encodeURIComponent(`name='${DRIVE_DATA_NAME}' and trashed=false`);const r=await driveFetch(`https://www.googleapis.com/drive/v3/files?spaces=appDataFolder&q=${q}&fields=files(id,name,modifiedTime)&pageSize=100`);const f=(r.files||[]).sort((a,b)=>(b.modifiedTime||'').localeCompare(a.modifiedTime||''))[0];driveFileId=f?.id||null;return f||null}
@@ -106,6 +108,4 @@ $('#driveSyncBtn').onclick=requestDriveSync;
 async function driveAutoSync(){if(!driveTokenClient||!driveAccessToken||!navigator.onLine)return;try{if(Date.now()>driveTokenExpiry-180000){driveTokenClient.requestAccessToken({prompt:''});return}await performDriveSync()}catch(e){driveStatus('Sync da riprovare · premi Sincronizza','bad')}}
 window.addEventListener('online',driveAutoSync);document.addEventListener('visibilitychange',()=>{if(!document.hidden)driveAutoSync()});setInterval(()=>{if(!document.hidden)driveAutoSync()},30000);
 if('serviceWorker' in navigator && location.protocol==='https:'){window.addEventListener('load',()=>navigator.serviceWorker.register('./sw.js').catch(e=>console.warn('Cache offline non attiva',e)))}
-if(getClientId())driveStatus('Drive configurato · premi Sincronizza');
-
-</script></body></html>
+if(getClientId())driveStatus('Client Google disponibile · premi Sincronizza');
