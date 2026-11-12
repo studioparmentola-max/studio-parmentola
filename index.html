@@ -257,15 +257,18 @@ async function connectFirebaseUser(user){
   cloudUser=user;cloudReady=false;driveStatus('Accesso effettuato · caricamento dati cloud…');
   if(cloudUnsubscribe){cloudUnsubscribe();cloudUnsubscribe=null;}
   try{
-    const ref=cloudDocRef(), snap=await getDoc(ref), localHas=hasRealData(db);
+    const ref=cloudDocRef(), snap=await getDoc(ref);
     if(snap.exists()&&snap.data().data){
+      // Firebase è l'archivio condiviso: all'accesso ogni dispositivo si allinea al cloud.
+      // Le differenze locali non generano richieste ripetute né sovrascrivono il cloud.
       const remoteDb=snap.data().data;
-      if(localHas&&JSON.stringify(db)!==JSON.stringify(remoteDb)){
-        const useCloud=confirm('ATTENZIONE: esistono dati sia su questo dispositivo sia su Firebase.\n\nOK = SOSTITUISCI i dati di questo dispositivo con quelli di Firebase.\nAnnulla = SOSTITUISCI i dati di Firebase con quelli di questo dispositivo.\n\nScegli in base a quale archivio vuoi conservare.');
-        if(useCloud){cloudApplying=true;db=remoteDb;localStorage.setItem('sp_finance_db',JSON.stringify(db));renderAll();cloudApplying=false;}
-        else {await setDoc(ref,{data:db,updatedAt:serverTimestamp(),updatedBy:user.email},{merge:true});}
-      }else if(!localHas){cloudApplying=true;db=remoteDb;localStorage.setItem('sp_finance_db',JSON.stringify(db));renderAll();cloudApplying=false;}
+      cloudApplying=true;
+      db=remoteDb;
+      localStorage.setItem('sp_finance_db',JSON.stringify(db));
+      renderAll();
+      cloudApplying=false;
     }else{
+      // Solo alla prima inizializzazione, se il documento cloud non esiste, carica i dati locali.
       await setDoc(ref,{data:db,updatedAt:serverTimestamp(),updatedBy:user.email},{merge:true});
     }
     cloudReady=true;
